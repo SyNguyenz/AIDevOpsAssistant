@@ -1,0 +1,25 @@
+# AI DevOps Assistant — PR-Agent config override
+# Overrides pr_agent/settings/configuration.toml defaults
+
+[config]
+# Primary model: Gemini via Google AI Studio (litellm prefix: "gemini/")
+model = "gemini/gemini-2.0-flash"
+
+# Fallback chain: Groq → OpenAI
+fallback_models = ["groq/llama-3.3-70b-versatile", "gpt-4o-mini"]
+
+git_provider = "github"
+publish_output = true
+verbosity_level = 0
+ai_timeout = 60
+
+# Language
+response_language = "en-US"
+
+[pr_reviewer]
+# Only include sections relevant to our risk-aware review
+require_score_review = false
+require_tests_review = true
+require_security_review = true
+num_code_suggestions = 3
+inline_code_comments = true

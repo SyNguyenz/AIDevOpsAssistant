@@ -136,6 +136,7 @@ celerybeat.pid
 
 # Environments
 .env
+!.env.example
 .envrc
 .venv
 env/
@@ -221,6 +222,7 @@ pr_agent_src/
 config.local.yaml
 secrets.yaml
 .env.*
+!.env.example
 
 # Logs directory
 logs/

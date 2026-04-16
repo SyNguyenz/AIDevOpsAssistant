@@ -223,6 +223,7 @@ config.local.yaml
 secrets.yaml
 .env.*
 !.env.example
+.secrets.toml
 
 # Logs directory
 logs/

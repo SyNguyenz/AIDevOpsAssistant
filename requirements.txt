@@ -1,0 +1,19 @@
+# AI DevOps Assistant — direct dependencies
+# PR-Agent: install from source (pip 0.3.0 has a bug)
+#   git clone https://github.com/qodo-ai/pr-agent.git pr_agent_src
+#   pip install -e pr_agent_src/
+
+# LLM
+litellm>=1.70.0
+
+# Config / env
+python-dotenv>=1.0.0
+PyYAML>=6.0
+
+# Git history mining (Phase 2)
+GitPython>=3.1.40
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=5.0.0
+pytest-asyncio>=0.23.0

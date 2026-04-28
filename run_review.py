@@ -37,10 +37,14 @@ os.environ.setdefault("CONFIG__MODEL", "gemini/gemini-2.0-flash")
 os.environ.setdefault("CONFIG__FALLBACK_MODELS", '["groq/llama-3.3-70b-versatile", "gpt-4o-mini"]')
 
 
-async def main(pr_url: str):
+async def main(pr_url: str, mode: str = "risk"):
     # Import AFTER env vars are set — dynaconf reads them at module load
-    from pr_agent.agent.pr_agent import PRAgent
+    from pr_agent.agent.pr_agent import PRAgent, command2class
     from pr_agent.config_loader import get_settings
+
+    # Register our custom risk-review tool
+    from src.server.risk_review_tool import PRRiskReview
+    command2class["risk_review"] = PRRiskReview
 
     # Load our project config on top of PR-Agent defaults
     config_path = Path(__file__).parent / "config" / "configuration.toml"
@@ -72,8 +76,11 @@ async def main(pr_url: str):
     print(f"Fallbacks: {fallbacks}")
     print(f"PR URL   : {pr_url}\n")
 
+    command = "risk_review" if mode == "risk" else "review"
+    print(f"Command  : {command}\n")
+
     agent = PRAgent()
-    success = await agent.handle_request(pr_url, "review")
+    success = await agent.handle_request(pr_url, command)
     if success:
         print("\nReview posted successfully.")
     else:
@@ -82,7 +89,9 @@ async def main(pr_url: str):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python run_review.py <PR_URL>")
+        print("Usage: python run_review.py <PR_URL> [--plain]")
         print("  e.g. python run_review.py https://github.com/owner/repo/pull/1")
+        print("  --plain: standard PR-Agent review (no risk scoring)")
         sys.exit(1)
-    asyncio.run(main(sys.argv[1]))
+    mode = "plain" if "--plain" in sys.argv else "risk"
+    asyncio.run(main(sys.argv[1], mode=mode))

@@ -1,0 +1,24 @@
+# Risk scoring weights — configurable per project
+# Based on CHID paper (Springer 2025) + OWASP Risk Rating
+# Sum must equal 1.0
+
+risk_weights:
+  blast_radius:    0.20   # blast radius size (affected files)
+  coverage_gap:    0.25   # ratio of uncovered files in blast radius
+  bug_frequency:   0.15   # fix/bug/hotfix commits in 90 days
+  contributor_churn: 0.15 # distinct authors in 90 days
+  new_contributor: 0.15   # PR author never touched these files before
+  pr_size:         0.10   # lines added + deleted in PR diff
+
+# Normalization caps
+normalization:
+  max_blast_radius: 20    # files — scores above this cap at 1.0
+  max_bug_frequency: 10   # commits
+  max_contributor_churn: 8
+  max_pr_size_lines: 1000 # lines
+
+# Risk thresholds
+thresholds:
+  low:    0.30   # score < low  → auto approve
+  high:   0.70   # score > high → request changes
+                 # between     → review comment

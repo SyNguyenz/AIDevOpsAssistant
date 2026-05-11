@@ -1,5 +1,5 @@
 """
-Risk-aware PR review tool — Week 9.
+Risk-aware PR review tool — Week 9 + Phase 4 (CI-aware).
 
 Orchestrates the full pipeline:
   1. Build/update KG for changed files
@@ -7,8 +7,9 @@ Orchestrates the full pipeline:
   3. Enrich with git history
   4. Compute coverage gap
   5. Score risk
-  6. Build context-aware LLM prompt
-  7. Post review comment via PR-Agent
+  6. (Phase 4) Read CI status + parse failed tests + KG cross-reference
+  7. Build context-aware LLM prompt
+  8. Post review comment via PR-Agent
 
 Registered as command "risk_review" in PR-Agent's command2class dispatcher.
 """
@@ -26,6 +27,8 @@ from pr_agent.log import get_logger
 from src.kg.coverage_mapper import compute_coverage_gap
 from src.kg.git_enrichment import compute_file_stats, is_new_contributor
 from src.risk.scorer import RiskInput, RiskScorer
+from src.server.ci_analyzer import FailureLink, build_ci_section, cross_reference_failures
+from src.server.ci_reader import CIReader, CIStatus, FailedTest
 
 logger = get_logger()
 
@@ -66,11 +69,14 @@ async def run_risk_pipeline(
     repo_root: Path | None = None,
     pr_author: str = "",
     pr_size_lines: int = 0,
+    head_sha: str = "",
+    github_token: str = "",
 ) -> dict:
     """
-    Run the full risk pipeline for a PR.
+    Run the full risk + CI pipeline for a PR.
 
-    Returns dict with: risk_result, blast_radius, coverage, git_stats, prompt_context
+    Returns dict with: risk_result, blast_radius, coverage, git_stats,
+                       ci_status, failed_tests, ci_links
     """
     # Resolve repo root
     if repo_root is None:
@@ -119,14 +125,48 @@ async def run_risk_pipeline(
     )
     risk_result = _scorer.score(inp)
 
+    # 6. CI-aware analysis (Phase 4)
+    ci_status: CIStatus | None = None
+    failed_tests: list[FailedTest] = []
+    ci_links: list[FailureLink] = []
+
+    token = github_token or os.environ.get("GITHUB_TOKEN", "")
+    if token and head_sha:
+        repo_name = _extract_repo_name(pr_url)
+        if repo_name:
+            try:
+                reader = CIReader(token, repo_name)
+                ci_status = reader.get_pr_ci_status(head_sha)
+                if ci_status and ci_status.conclusion == "failure":
+                    failed_tests = reader.get_failed_tests(ci_status.run_id)
+                    ci_links = cross_reference_failures(
+                        failed_tests, changed_files, impacted_files
+                    )
+                    logger.info(
+                        f"CI: {len(failed_tests)} failed tests, "
+                        f"{len(ci_links)} linked to blast radius"
+                    )
+            except Exception as exc:
+                logger.warning(f"CI analysis failed (non-fatal): {exc}")
+
     return {
-        "risk_result":     risk_result,
-        "blast_radius":    blast,
-        "coverage":        cov,
-        "git_stats":       git_stats,
-        "changed_files":   changed_files,
-        "impacted_files":  impacted_files,
+        "risk_result":    risk_result,
+        "blast_radius":   blast,
+        "coverage":       cov,
+        "git_stats":      git_stats,
+        "changed_files":  changed_files,
+        "impacted_files": impacted_files,
+        "ci_status":      ci_status,
+        "failed_tests":   failed_tests,
+        "ci_links":       ci_links,
     }
+
+
+def _extract_repo_name(pr_url: str) -> str:
+    """Extract 'owner/repo' from a GitHub PR URL."""
+    import re
+    m = re.search(r"github\.com/([^/]+/[^/]+)/pull/", pr_url)
+    return m.group(1) if m else ""
 
 
 def build_risk_prompt(pipeline_output: dict) -> str:
@@ -155,7 +195,7 @@ def build_risk_prompt(pipeline_output: dict) -> str:
     if uncovered_names:
         lines += [
             "### Coverage Gap",
-            f"These files in the blast radius have no test coverage:",
+            "These files in the blast radius have no test coverage:",
             "".join(f"\n- `{f}`" for f in uncovered_names),
             "",
         ]
@@ -168,6 +208,15 @@ def build_risk_prompt(pipeline_output: dict) -> str:
             "".join(f"\n- `{Path(f).name}`" for f in impacted[:10]),
             "",
         ]
+
+    # Phase 4: CI section
+    ci_section = build_ci_section(
+        pipeline_output.get("ci_status"),
+        pipeline_output.get("failed_tests", []),
+        pipeline_output.get("ci_links", []),
+    )
+    if ci_section:
+        lines.append(ci_section)
 
     lines.append("---")
     return "\n".join(lines)
@@ -195,8 +244,15 @@ class PRRiskReview:
 
         logger.info(f"Running risk-aware review for {self.pr_url}")
 
-        # Run risk pipeline
-        pipeline = await run_risk_pipeline(self.pr_url)
+        # Resolve head SHA for CI lookup
+        head_sha = self._resolve_head_sha()
+
+        # Run risk pipeline (includes CI analysis if token + head SHA available)
+        pipeline = await run_risk_pipeline(
+            self.pr_url,
+            head_sha=head_sha,
+            github_token=os.environ.get("GITHUB_TOKEN", ""),
+        )
 
         if pipeline:
             risk = pipeline["risk_result"]
@@ -217,10 +273,18 @@ class PRRiskReview:
         if pipeline and pipeline["risk_result"].level in ("medium", "high"):
             await self._post_risk_comment(pipeline)
 
+    def _resolve_head_sha(self) -> str:
+        """Try to get the PR's head SHA via git_provider."""
+        try:
+            git_provider = get_git_provider(self.pr_url)
+            # PR-Agent exposes last_commit_id on most providers
+            return git_provider.last_commit_id or ""
+        except Exception:
+            return ""
+
     async def _post_risk_comment(self, pipeline: dict):
         from pr_agent.git_providers import get_git_provider_with_context
         git_provider = get_git_provider_with_context(self.pr_url)
-        risk = pipeline["risk_result"]
         body = build_risk_prompt(pipeline)
         git_provider.publish_comment(body)
         logger.info("Posted risk summary comment")

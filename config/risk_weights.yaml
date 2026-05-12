@@ -10,15 +10,16 @@ risk_weights:
   new_contributor: 0.15   # PR author never touched these files before
   pr_size:         0.10   # lines added + deleted in PR diff
 
-# Normalization caps
+# Normalization caps (calibrated for small-to-medium repos, ~10-50 source files)
+# Scale these up for larger monorepos
 normalization:
-  max_blast_radius: 20    # files — scores above this cap at 1.0
-  max_bug_frequency: 10   # commits
-  max_contributor_churn: 8
-  max_pr_size_lines: 1000 # lines
+  max_blast_radius: 8     # files — scores above this cap at 1.0
+  max_bug_frequency: 5    # commits in 90 days
+  max_contributor_churn: 5
+  max_pr_size_lines: 500  # lines
 
 # Risk thresholds
 thresholds:
   low:    0.30   # score < low  → auto approve
-  high:   0.70   # score > high → request changes
+  high:   0.55   # score > high → request changes
                  # between     → review comment

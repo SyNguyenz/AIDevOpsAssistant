@@ -263,7 +263,3 @@ This project extends two existing open-source tools without modifying their sour
 - "Does AI Code Review Lead to Code Changes?" (2025) — survey of 16 AI review tools
 
 ---
-
-## License
-
-Academic project — DA2 thesis, University of Technology (UIT), 2026.

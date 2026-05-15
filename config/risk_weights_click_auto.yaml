@@ -1,0 +1,15 @@
+risk_weights:
+  blast_radius: 0.2
+  coverage_gap: 0.25
+  bug_frequency: 0.15
+  contributor_churn: 0.15
+  new_contributor: 0.15
+  pr_size: 0.1
+normalization:
+  max_blast_radius: 69
+  max_bug_frequency: 9
+  max_contributor_churn: 10
+  max_pr_size_lines: 500
+thresholds:
+  low: 0.3
+  high: 0.55

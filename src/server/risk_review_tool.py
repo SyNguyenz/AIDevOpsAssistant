@@ -32,7 +32,17 @@ from src.server.ci_reader import CIReader, CIStatus, FailedTest
 
 logger = get_logger()
 
+# Module-level scorer; replaced per-pipeline if a local calibrated config is found.
 _scorer = RiskScorer()
+
+
+def _load_scorer_for_repo(repo_root: Path) -> RiskScorer:
+    """Load RiskScorer with local calibrated config if present, else default."""
+    local_cfg = repo_root / ".code-review-graph" / "risk_weights.yaml"
+    if local_cfg.exists():
+        logger.info(f"Using local risk config: {local_cfg}")
+        return RiskScorer(local_cfg)
+    return _scorer
 
 # ---------------------------------------------------------------------------
 # KG helpers (thin wrappers so the tool doesn't import build at module level)
@@ -93,8 +103,10 @@ async def run_risk_pipeline(
         if f.filename.endswith(".py")
     ]
 
+    scorer = _load_scorer_for_repo(repo_root)
+
     if not changed_files:
-        return {"risk_result": _scorer.score(RiskInput()), "note": "no Python files changed"}
+        return {"risk_result": scorer.score(RiskInput()), "note": "no Python files changed"}
 
     # 1. Build KG + blast radius
     store = _build_kg(repo_root, changed_files)
@@ -123,7 +135,7 @@ async def run_risk_pipeline(
         is_new_contributor = new_contrib,
         pr_size_lines      = pr_size_lines,
     )
-    risk_result = _scorer.score(inp)
+    risk_result = scorer.score(inp)
 
     # 6. CI-aware analysis (Phase 4)
     ci_status: CIStatus | None = None

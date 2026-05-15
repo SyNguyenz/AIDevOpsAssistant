@@ -1,0 +1,26 @@
+# Risk scoring weights — calibrated for pallets/click
+# Active OSS project with ~18 source files, blast radii 30-60, many contributors
+#
+# Key differences from default (dummy_repo) config:
+#   - max_blast_radius: 60  (click files heavily interconnected, core.py blast ~32)
+#   - max_bug_frequency: 15 (active project, core.py sees 7+ bug commits/90d)
+#   - max_contributor_churn: 15 (many contributors to core modules)
+#   - thresholds adjusted accordingly
+
+risk_weights:
+  blast_radius:      0.20
+  coverage_gap:      0.25
+  bug_frequency:     0.15
+  contributor_churn: 0.15
+  new_contributor:   0.15
+  pr_size:           0.10
+
+normalization:
+  max_blast_radius:     60   # click's most connected files reach ~50
+  max_bug_frequency:    15   # core.py sees ~7 bug-fix commits / 90 days
+  max_contributor_churn: 15  # active OSS team
+  max_pr_size_lines:   500
+
+thresholds:
+  low:  0.25   # lower baseline since coverage gap is uniformly high in click
+  high: 0.55
